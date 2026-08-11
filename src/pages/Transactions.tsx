@@ -344,21 +344,21 @@ export default function Transactions() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6 max-w-full overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Transactions</h1>
-          <p className="text-muted-foreground">View and manage your transactions</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Transactions</h1>
+          <p className="text-sm text-muted-foreground">View and manage your transactions</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link to="/voice-transact?intent=transaction">
-            <Button className="bg-primary hover:bg-primary/90 text-white shadow-md transition-all">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          <Link to="/voice-transact?intent=transaction" className="flex-1 sm:flex-none">
+            <Button className="w-full bg-primary hover:bg-primary/90 text-white shadow-md transition-all text-xs sm:text-sm">
               <Sparkles className="mr-2 h-4 w-4 text-white animate-pulse" />
-              Ask AI Transaction Assistant
+              Ask AI Assistant
             </Button>
           </Link>
-          <Link to="/transactions/new">
-            <Button>
+          <Link to="/transactions/new" className="flex-1 sm:flex-none">
+            <Button className="w-full text-xs sm:text-sm">
               <Plus className="mr-2 h-4 w-4" />
               Add Transaction
             </Button>
@@ -741,95 +741,97 @@ export default function Transactions() {
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <Card className="overflow-hidden">
+              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-2 sm:space-y-0 pb-4">
                 <CardTitle>All Transactions</CardTitle>
                 <div className="text-sm text-muted-foreground font-medium">
                   Showing {filteredAndSortedTransactions.length} of {transactions.length} transactions
                 </div>
               </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredAndSortedTransactions.map((transaction) => (
-                      <TableRow key={transaction.id}>
-                        <TableCell>{formatDate(transaction.transaction_date)}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getTransactionIcon(transaction.transaction_type)}
-                            <Badge variant={getTransactionBadgeVariant(transaction.transaction_type)}>
-                              {transaction.transaction_type}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell className="max-w-xs">
-                          <div className="break-words line-clamp-2">
-                            {transaction.description || '-'}
-                          </div>
-                        </TableCell>
-                        <TableCell className="max-w-xs">
-                          <div className="break-words">
-                            {transaction.transaction_splits && transaction.transaction_splits.length > 0 ? (
-                              <div className="flex flex-col gap-1">
-                                <span className="text-[10px] font-bold text-purple-700 dark:text-purple-400">
-                                  Split ({transaction.transaction_splits.length}):
-                                </span>
-                                <div className="flex flex-wrap gap-1">
-                                  {transaction.transaction_splits.map((s, idx) => (
-                                    <Badge key={s.id || idx} variant="outline" className="text-[9px] py-0 px-1.5 border-purple-200 bg-purple-50/30 text-slate-700 dark:text-slate-300 dark:border-purple-900/50">
-                                      {s.category}: {formatCurrency(s.amount, transaction.currency)}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : (
-                              transaction.category || '-'
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          className={`text-right font-semibold ${
-                            transaction.transaction_type === 'income' ? 'text-success' : 'text-danger'
-                          }`}
-                        >
-                          {transaction.transaction_type === 'income' ? '+' : '-'}
-                          {formatCurrency(Number(transaction.amount), transaction.currency)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => navigate(`/transactions/edit/${transaction.id}`)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setTransactionToDelete(transaction);
-                                setDeleteDialogOpen(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 text-danger" />
-                            </Button>
-                          </div>
-                        </TableCell>
+              <CardContent className="p-0 sm:p-6">
+                <div className="w-full overflow-x-auto touch-pan-x scrollbar-thin">
+                  <Table className="min-w-[650px] sm:min-w-[750px] w-full">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="whitespace-nowrap">Date</TableHead>
+                        <TableHead className="whitespace-nowrap">Type</TableHead>
+                        <TableHead className="whitespace-nowrap">Description</TableHead>
+                        <TableHead className="whitespace-nowrap">Category</TableHead>
+                        <TableHead className="text-right whitespace-nowrap">Amount</TableHead>
+                        <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredAndSortedTransactions.map((transaction) => (
+                        <TableRow key={transaction.id}>
+                          <TableCell className="whitespace-nowrap">{formatDate(transaction.transaction_date)}</TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              {getTransactionIcon(transaction.transaction_type)}
+                              <Badge variant={getTransactionBadgeVariant(transaction.transaction_type)}>
+                                {transaction.transaction_type}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell className="max-w-xs">
+                            <div className="break-words line-clamp-2">
+                              {transaction.description || '-'}
+                            </div>
+                          </TableCell>
+                          <TableCell className="max-w-xs">
+                            <div className="break-words">
+                              {transaction.transaction_splits && transaction.transaction_splits.length > 0 ? (
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-[10px] font-bold text-purple-700 dark:text-purple-400">
+                                    Split ({transaction.transaction_splits.length}):
+                                  </span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {transaction.transaction_splits.map((s, idx) => (
+                                      <Badge key={s.id || idx} variant="outline" className="text-[9px] py-0 px-1.5 border-purple-200 bg-purple-50/30 text-slate-700 dark:text-slate-300 dark:border-purple-900/50">
+                                        {s.category}: {formatCurrency(s.amount, transaction.currency)}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                transaction.category || '-'
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            className={`text-right font-semibold whitespace-nowrap ${
+                              transaction.transaction_type === 'income' ? 'text-success' : 'text-danger'
+                            }`}
+                          >
+                            {transaction.transaction_type === 'income' ? '+' : '-'}
+                            {formatCurrency(Number(transaction.amount), transaction.currency)}
+                          </TableCell>
+                          <TableCell className="text-right whitespace-nowrap">
+                            <div className="flex justify-end gap-1 sm:gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => navigate(`/transactions/edit/${transaction.id}`)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setTransactionToDelete(transaction);
+                                  setDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 text-danger" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           )}

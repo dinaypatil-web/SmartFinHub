@@ -471,8 +471,8 @@ export default function CreditCardEMIs() {
           </div>
 
           {/* Table */}
-          <div className="border rounded-lg bg-card overflow-hidden">
-            <Table>
+          <div className="border rounded-lg bg-card overflow-x-auto touch-pan-x scrollbar-thin">
+            <Table className="min-w-[700px] w-full">
               <TableHeader>
                 <TableRow>
                   <TableHead>Credit Card</TableHead>
