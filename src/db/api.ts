@@ -1839,16 +1839,16 @@ export const creditCardStatementApi = {
       };
 
       const getStatementMonthLocal = (dateStr: string, stmtDay: number): string => {
-        const date = new Date(dateStr);
-        const dayOfMonth = date.getDate();
-        let month = date.getMonth();
-        let year = date.getFullYear();
+        const [yearStr, monthStr, dayStr] = dateStr.split('-');
+        let year = parseInt(yearStr, 10);
+        let month = parseInt(monthStr, 10) - 1;
+        const dayOfMonth = parseInt(dayStr, 10);
 
-        if (dayOfMonth < stmtDay) {
-          month--;
-          if (month < 0) {
-            month = 11;
-            year--;
+        if (dayOfMonth > stmtDay) {
+          month++;
+          if (month > 11) {
+            month = 0;
+            year++;
           }
         }
         return `${year}-${String(month + 1).padStart(2, '0')}`;
@@ -2053,6 +2053,22 @@ export const creditCardStatementApi = {
     const { data, error } = await supabase
       .from('credit_card_statement_lines')
       .update({ status, paid_amount: paidAmount })
+      .eq('id', lineId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Update arbitrary statement line fields (e.g. statement_month, transaction_date)
+  async updateStatementLine(
+    lineId: string,
+    updates: Partial<any>
+  ): Promise<any> {
+    const { data, error } = await supabase
+      .from('credit_card_statement_lines')
+      .update(updates)
       .eq('id', lineId)
       .select()
       .single();

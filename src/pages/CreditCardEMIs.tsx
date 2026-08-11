@@ -61,16 +61,14 @@ export default function CreditCardEMIs() {
 
   const getStatementMonthLocal = (dateStr: string, stmtDay: number): string => {
     const [year, monthVal, dayVal] = dateStr.split('-').map(Number);
-    const date = new Date(year, monthVal - 1, dayVal);
-    const dayOfMonth = date.getDate();
-    let month = date.getMonth();
-    let y = date.getFullYear();
+    let month = monthVal - 1;
+    let y = year;
 
-    if (dayOfMonth < stmtDay) {
-      month--;
-      if (month < 0) {
-        month = 11;
-        y--;
+    if (dayVal > stmtDay) {
+      month++;
+      if (month > 11) {
+        month = 0;
+        y++;
       }
     }
     return `${y}-${String(month + 1).padStart(2, '0')}`;
@@ -78,7 +76,9 @@ export default function CreditCardEMIs() {
 
   const getStatementDateForMonth = (monthStr: string, statementDay: number): Date => {
     const [year, month] = monthStr.split('-').map(Number);
-    return new Date(year, month - 1, statementDay);
+    const lastDay = new Date(year, month, 0).getDate();
+    const safeDay = Math.min(statementDay, lastDay);
+    return new Date(year, month - 1, safeDay);
   };
 
   const formatStatementMonth = (monthStr: string) => {
@@ -114,7 +114,7 @@ export default function CreditCardEMIs() {
       const cardIds = new Set(cards.map(c => c.id));
       let cardEmis = emisData.filter((emi: EMITransaction) => cardIds.has(emi.account_id));
 
-      // Self-heal logic for active EMIs with miscalculated next_due_date
+      // Self-heal logic for active EMIs with miscalculated next_due_date or misattributed statement lines
       let hasFixedAny = false;
       for (const emi of cardEmis) {
         if (emi.status === 'active') {
@@ -127,33 +127,52 @@ export default function CreditCardEMIs() {
           
           // Calculate correct next due date based on paid installments
           const paidInstallments = emi.emi_months - emi.remaining_installments;
-          const correctNextDueDate = new Date(correctFirstDueDateStr);
-          correctNextDueDate.setMonth(correctNextDueDate.getMonth() + paidInstallments);
-          
-          // Adjust for safe day of the month
-          const lastDay = new Date(correctNextDueDate.getFullYear(), correctNextDueDate.getMonth() + 1, 0).getDate();
+          const [fY, fM] = correctFirstDueDateStr.split('-').map(Number);
+          const correctNextDueDateObj = new Date(fY, fM - 1 + paidInstallments, 1);
+          const lastDay = new Date(correctNextDueDateObj.getFullYear(), correctNextDueDateObj.getMonth() + 1, 0).getDate();
           const safeDay = Math.min(stmtDay, lastDay);
-          correctNextDueDate.setDate(safeDay);
+          correctNextDueDateObj.setDate(safeDay);
           
-          const correctNextDueDateStr = correctNextDueDate.toISOString().split('T')[0];
+          const cY = correctNextDueDateObj.getFullYear();
+          const cM = String(correctNextDueDateObj.getMonth() + 1).padStart(2, '0');
+          const cD = String(correctNextDueDateObj.getDate()).padStart(2, '0');
+          const correctNextDueDateStr = `${cY}-${cM}-${cD}`;
           
           if (emi.next_due_date !== correctNextDueDateStr) {
             console.log(`Self-healing EMI "${emi.description}": next_due_date corrected from ${emi.next_due_date} to ${correctNextDueDateStr}`);
             await emiApi.updateEMI(emi.id, { next_due_date: correctNextDueDateStr });
             hasFixedAny = true;
           }
+
+          // Heal any existing statement lines for this EMI that have incorrect statement_month (e.g., previous month)
+          const expectedFirstStmtMonth = getStatementMonthLocal(correctFirstDueDateStr, stmtDay);
+          const emiLines = statementLinesData.filter((line: any) => line.emi_id === emi.id);
+          for (const line of emiLines) {
+            if (line.statement_month < expectedFirstStmtMonth && line.status !== 'paid') {
+              console.log(`Self-healing statement line "${line.id}": statement_month corrected from ${line.statement_month} to ${expectedFirstStmtMonth}`);
+              await creditCardStatementApi.updateStatementLine(line.id, {
+                statement_month: expectedFirstStmtMonth,
+                transaction_date: correctFirstDueDateStr,
+              });
+              hasFixedAny = true;
+            }
+          }
         }
       }
 
       if (hasFixedAny) {
-        // Reload EMIs if we patched any
-        const updatedEmisData = await emiApi.getEMIsByUser(user.id);
+        // Reload EMIs & statement lines if we patched any
+        const [updatedEmisData, updatedStatementLinesData] = await Promise.all([
+          emiApi.getEMIsByUser(user.id),
+          creditCardStatementApi.getAllStatementLines(user.id),
+        ]);
         cardEmis = updatedEmisData.filter((emi: EMITransaction) => cardIds.has(emi.account_id));
+        setStatementLines(updatedStatementLinesData);
+      } else {
+        setStatementLines(statementLinesData);
       }
 
       setEmis(cardEmis);
-      
-      setStatementLines(statementLinesData);
       setAllocations(allocationsData);
     } catch (err) {
       console.error('Error loading EMI page data:', err);
@@ -206,16 +225,23 @@ export default function CreditCardEMIs() {
       const currency = card.currency || 'INR';
       const emiLines = statementLines.filter(line => line.emi_id === emi.id);
 
-      // Current unpaid installment number
-      const nextInstallmentNum = emi.emi_months - emi.remaining_installments + 1;
+      // Determine correct first due date string for installment 1
+      const firstDueDateStr = calculateFirstEMIDueDate(emi.start_date, stmtDay);
 
       for (let instNum = 1; instNum <= emi.emi_months; instNum++) {
-        const monthsOffset = instNum - nextInstallmentNum;
+        const monthsOffset = instNum - 1;
 
-        // Calculate expected next_due_date for this installment
-        const expectedDueDate = new Date(parseLocalDate(emi.next_due_date));
-        expectedDueDate.setMonth(expectedDueDate.getMonth() + monthsOffset);
-        const expectedDueDateStr = expectedDueDate.toISOString().split('T')[0];
+        // Calculate expected due date for installment N based on firstDueDateStr
+        const [fY, fM] = firstDueDateStr.split('-').map(Number);
+        const expectedDueDateObj = new Date(fY, fM - 1 + monthsOffset, 1);
+        const lastDay = new Date(expectedDueDateObj.getFullYear(), expectedDueDateObj.getMonth() + 1, 0).getDate();
+        const safeDay = Math.min(stmtDay, lastDay);
+        expectedDueDateObj.setDate(safeDay);
+
+        const ey = expectedDueDateObj.getFullYear();
+        const em = String(expectedDueDateObj.getMonth() + 1).padStart(2, '0');
+        const ed = String(expectedDueDateObj.getDate()).padStart(2, '0');
+        const expectedDueDateStr = `${ey}-${em}-${ed}`;
 
         const expectedStmtMonth = getStatementMonthLocal(expectedDueDateStr, stmtDay);
 

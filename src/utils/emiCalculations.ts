@@ -132,9 +132,12 @@ export function calculateFirstEMIDueDate(
 ): string {
   if (!statementDay) {
     // If no statement day is available, default to 1 month after transaction date
-    const date = new Date(transactionDateStr);
-    date.setMonth(date.getMonth() + 1);
-    return date.toISOString().split('T')[0];
+    const [year, monthVal, dayVal] = transactionDateStr.split('-').map(Number);
+    const date = new Date(year, monthVal, dayVal);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
 
   const [year, monthVal, dayVal] = transactionDateStr.split('-').map(Number);

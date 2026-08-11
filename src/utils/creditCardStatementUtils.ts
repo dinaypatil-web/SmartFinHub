@@ -59,8 +59,9 @@ export async function createStatementLineForTransaction(
     }
 
     // Determine statement month (YYYY-MM format)
-    const transactionDate = new Date(transaction.transaction_date);
-    const statementMonth = transactionDate.toISOString().slice(0, 7);
+    const statementMonth = account.statement_day
+      ? getStatementMonth(transaction.transaction_date, account.statement_day)
+      : transaction.transaction_date.slice(0, 7);
 
     // Create statement line item
     const statementLine = await creditCardStatementApi.createStatementLine({
@@ -98,6 +99,7 @@ export async function createStatementLineForTransaction(
  * @param description - Description (e.g., "EMI - iPhone")
  * @param userId - The user ID
  * @param currency - Currency code
+ * @param statementDay - Optional credit card statement day
  */
 export async function createStatementLineForEMI(
   creditCardId: string,
@@ -106,11 +108,13 @@ export async function createStatementLineForEMI(
   nextDueDate: string,
   description: string,
   userId: string,
-  currency: string = 'INR'
+  currency: string = 'INR',
+  statementDay?: number
 ): Promise<any | null> {
   try {
-    const dueDate = new Date(nextDueDate);
-    const statementMonth = dueDate.toISOString().slice(0, 7);
+    const statementMonth = statementDay
+      ? getStatementMonth(nextDueDate, statementDay)
+      : nextDueDate.slice(0, 7);
 
     const statementLine = await creditCardStatementApi.createStatementLine({
       credit_card_id: creditCardId,
@@ -136,10 +140,10 @@ export async function createStatementLineForEMI(
 /**
  * Calculates which statement month a transaction falls into.
  * 
- * By default, assumes monthly statements starting from 1st of each month.
- * Can be customized based on account's statement cycle dates.
+ * If transaction date's day of month is after statementStartDate, it falls into the NEXT month's statement.
+ * If transaction date's day of month is <= statementStartDate, it falls into THIS month's statement.
  * 
- * @param transactionDate - The transaction date
+ * @param transactionDate - The transaction date (YYYY-MM-DD)
  * @param statementStartDate - Optional custom statement start date (day of month)
  * @returns Statement month in YYYY-MM format
  */
@@ -147,18 +151,17 @@ export function getStatementMonth(
   transactionDate: string,
   statementStartDate: number = 1
 ): string {
-  const date = new Date(transactionDate);
-  const dayOfMonth = date.getDate();
+  const [yearStr, monthStr, dayStr] = transactionDate.split('-');
+  let year = parseInt(yearStr, 10);
+  let month = parseInt(monthStr, 10) - 1; // 0-indexed month
+  const dayOfMonth = parseInt(dayStr, 10);
 
-  // If transaction is before statement start date, it belongs to previous month's statement
-  let month = date.getMonth();
-  let year = date.getFullYear();
-
-  if (dayOfMonth < statementStartDate) {
-    month--;
-    if (month < 0) {
-      month = 11;
-      year--;
+  // If transaction date is after the statement date of the month, it belongs to the next month's statement
+  if (dayOfMonth > statementStartDate) {
+    month++;
+    if (month > 11) {
+      month = 0;
+      year++;
     }
   }
 
